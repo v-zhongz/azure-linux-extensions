@@ -28,7 +28,7 @@ import psutil
 import string
 import urlparse
 import xml.dom.minidom as minidom
-from azure.storage import TableService, Entity
+from azure.storage.table import TableService, Entity
 from Utils.WAAgentUtil import waagent, AddExtensionEvent
 import Utils.HandlerUtil as Util
 
