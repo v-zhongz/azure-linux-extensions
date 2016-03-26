@@ -1,6 +1,12 @@
 Common/azure-sdk-for-pythonV1.0.2/azure/
 Common/psutil/LICENSE
 Common/libpsutil
-Utils/
+Common/concurrent
+Common/dateutil
+Common/requests
+Common/dateutil
+Common/six.py
+Utils/pkg_resources
 LICENSE-2_0.txt
 AzureEnhancedMonitor/hvinfo/bin
+

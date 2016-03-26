@@ -93,6 +93,24 @@ def updateLatestErrorRecord(s):
     AddExtensionEvent(message="failed to write latest error record")
     raise
 
+def getProxyHostFromWaagentConfig():
+    config = waagent.ConfigurationProvider(None)
+    return config.get("HttpProxy.Host")
+
+def getProxyPortFromWaagentConfig():
+    config = waagent.ConfigurationProvider(None)
+    return config.get("HttpProxy.Port")
+
+def getTableService(accountName, accountKey, hostBase):
+    tableService = TableService(account_name = accountName,
+                                account_key = accountKey,
+                                host_base = hostBase)
+    proxyHost = getProxyHostFromWaagentConfig()
+    if proxyHost is not None:
+        tableService.set_proxy(host = proxyHost, port = getProxyPortFromWaagentConfig())
+
+    return tableService
+
 def easyHash(s):
     """
     MDSD used the following hash algorithm to cal a first part of partition key
@@ -103,7 +121,7 @@ def easyHash(s):
         strHash = strHash * multiplier + ord(c)
         #Only keep the last 64bit, since the mod base is 100
         strHash = strHash % (1<<64) 
-    return strHash % 100 #Assume eventVolume is Large
+    return strHash % 10 #Assume eventVolume is Large
 
 Epoch = datetime.datetime(1, 1, 1)
 tickInOneSecond = 1000 * 10000 # 1s = 1000 * 10000 ticks
@@ -113,21 +131,21 @@ def getMDSTimestamp(unixTimestamp):
     startTimestamp = int(timedelta_total_seconds(unixTime - Epoch))
     return startTimestamp * tickInOneSecond
 
-def getIdentity():
-    identity = socket.gethostname()
+def getIdentity(deploymentId):
+    identity = deploymentId + "___" + socket.gethostname()
     return identity
 
 def getMDSPartitionKey(identity, timestamp):
     hashVal = easyHash(identity)
     return "{0:0>19d}___{1:0>19d}".format(hashVal, timestamp)
 
-def getAzureDiagnosticKeyRange():
+def getAzureDiagnosticKeyRange(deploymentId):
     #Round down by MonitoringInterval
     endTime = (int(time.time()) / MonitoringInterval) * MonitoringInterval
     endTime = endTime - AzureTableDelay
     startTime = endTime - MonitoringInterval
 
-    identity = getIdentity()
+    identity = getIdentity(deploymentId)
     startKey = getMDSPartitionKey(identity, getMDSTimestamp(startTime))
     endKey = getMDSPartitionKey(identity, getMDSTimestamp(endTime))
     return startKey, endKey
@@ -137,9 +155,9 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
     try:
         waagent.Log("Retrieve diagnostic data(CPU).")
         table = "LinuxCpuVer2v0"
-        tableService = TableService(account_name = accountName, 
-                                    account_key = accountKey,
-                                    host_base = hostBase)
+        tableService = getTableService(accountName, 
+                                       accountKey,
+                                       hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
         oselect = ("PercentProcessorTime,DeploymentId")
@@ -154,16 +172,15 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
         updateLatestErrorRecord(FAILED_TO_RETRIEVE_MDS_DATA)
         AddExtensionEvent(message=FAILED_TO_RETRIEVE_MDS_DATA)
         return None
-    
 
 def getAzureDiagnosticMemoryData(accountName, accountKey, hostBase,
                                  startKey, endKey, deploymentId):
     try:
         waagent.Log("Retrieve diagnostic data: Memory")
         table = "LinuxMemoryVer2v0"
-        tableService = TableService(account_name = accountName, 
-                                    account_key = accountKey,
-                                    host_base = hostBase)
+        tableService = getTableService(accountName,
+                                       accountKey,
+                                       hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
         oselect = ("PercentAvailableMemory,DeploymentId")
@@ -187,7 +204,7 @@ class AzureDiagnosticData(object):
         hostBase = config.getLADHostBase()
         hostname = socket.gethostname()
         deploymentId = config.getVmDeploymentId()
-        startKey, endKey = getAzureDiagnosticKeyRange()
+        startKey, endKey = getAzureDiagnosticKeyRange(deploymentId)
         self.cpuPercent = getAzureDiagnosticCPUData(accountName, 
                                                     accountKey,
                                                     hostBase,
@@ -271,11 +288,11 @@ class AzureDiagnosticMetric(object):
     def getNetworkAdapterMapping(self, adapterId):
         return self.linux.getNetworkAdapterMapping(adapterId)
 
-    def getMaxNetworkBandwidth(self, adapterId):
-        return self.linux.getMaxNetworkBandwidth(adapterId)
+    def getMaxNetworkBandwidth(self):
+        return self.linux.getMaxNetworkBandwidth()
 
-    def getMinNetworkBandwidth(self, adapterId):
-        return self.linux.getMinNetworkBandwidth(adapterId)
+    def getMinNetworkBandwidth(self):
+        return self.linux.getMinNetworkBandwidth()
 
     def getNetworkReadBytes(self, adapterId):
         return self.linux.getNetworkReadBytes(adapterId)
@@ -553,11 +570,11 @@ class LinuxMetric(object):
     def getNetworkAdapterMapping(self, adapterId):
         return getMacAddress(adapterId)
 
-    def getMaxNetworkBandwidth(self, adapterId):
-        return 1000 #Mbit/s 
+    def getMaxNetworkBandwidth(self):
+        return 10000 #Mbit/s 
 
-    def getMinNetworkBandwidth(self, adapterId):
-        return 1000 #Mbit/s 
+    def getMinNetworkBandwidth(self):
+        return 10000 #Mbit/s 
 
     def getNetworkReadBytes(self, adapterId):
         return self.networkInfo.getNetworkReadBytes(adapterId)
@@ -608,10 +625,10 @@ class VMDataSource(object):
             if adapterId.startswith('eth'):
                 counters.append(self.createCounterAdapterId(adapterId))
                 counters.append(self.createCounterNetworkMapping(metrics, adapterId))
-                counters.append(self.createCounterMinNetworkBandwidth(metrics, adapterId))
-                counters.append(self.createCounterMaxNetworkBandwidth(metrics, adapterId))
                 counters.append(self.createCounterNetworkReadBytes(metrics, adapterId))
                 counters.append(self.createCounterNetworkWriteBytes(metrics, adapterId))
+        counters.append(self.createCounterMinNetworkBandwidth(metrics))
+        counters.append(self.createCounterMaxNetworkBandwidth(metrics))
         counters.append(self.createCounterNetworkPacketRetransmitted(metrics))
         
         #Hardware change
@@ -760,24 +777,22 @@ class VMDataSource(object):
                            instance = adapterId,
                            value = metrics.getNetworkAdapterMapping(adapterId))
 
-    def createCounterMaxNetworkBandwidth(self, metrics, adapterId):
+    def createCounterMaxNetworkBandwidth(self, metrics):
         return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_INT,
                            category = "network",
                            name = "VM Maximum Network Bandwidth",
-                           instance = adapterId,
-                           value = metrics.getMaxNetworkBandwidth(adapterId),
+                           value = metrics.getMaxNetworkBandwidth(),
                            unit = "Mbit/s")
 
-    def createCounterMinNetworkBandwidth(self, metrics, adapterId):
+    def createCounterMinNetworkBandwidth(self, metrics):
         return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_INT,
                            category = "network",
                            name = "VM Minimum Network Bandwidth",
-                           instance = adapterId,
-                           value = metrics.getMinNetworkBandwidth(adapterId),
+                           value = metrics.getMinNetworkBandwidth(),
                            unit = "Mbit/s")
 
     def createCounterNetworkReadBytes(self, metrics, adapterId):
-        return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_LARGE,
+        return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_DOUBLE,
                            category = "network",
                            name = "Network Read Bytes",
                            instance = adapterId,
@@ -785,7 +800,7 @@ class VMDataSource(object):
                            unit = "byte/s")
 
     def createCounterNetworkWriteBytes(self, metrics, adapterId):
-        return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_LARGE,
+        return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_DOUBLE,
                            category = "network",
                            name = "Network Write Bytes",
                            instance = adapterId,
@@ -819,9 +834,9 @@ def getStorageTableKeyRange():
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
     try:
         waagent.Log("Retrieve storage metrics data.")
-        tableService = TableService(account_name = account, 
-                                    account_key = key,
-                                    host_base = hostBase)
+        tableService = getTableService(accountName,
+                                       accountKey,
+                                       hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}'"
                    "").format(startKey, endKey)
         oselect = ("TotalRequests,TotalIngress,TotalEgress,AverageE2ELatency,"
@@ -875,7 +890,7 @@ class DiskInfo(object):
             lunToDevMap[lun] = dev
 
         diskCount = self.config.getDataDiskCount()
-        for i in range(0, diskCount):
+        for i in range(1, diskCount+1):
             lun = self.config.getDataDiskLun(i)
             datadiskVhd = "{0} {1}".format(self.config.getDataDiskAccount(i),
                                            self.config.getDataDiskName(i))
@@ -1208,7 +1223,7 @@ class StaticDataSource(object):
         return PerfCounter(counterType = PerfCounterType.COUNTER_TYPE_INT,
                            category = "config",
                            name = "SLA Max Disk Bandwidth per VM",
-                           unit = "Ops/sec",
+                           unit = "MB/s",
                            value = throughput)
      
     def createCounterVMSLAIOPS(self, iops):
