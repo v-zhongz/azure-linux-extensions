@@ -301,7 +301,16 @@ class AzureDiagnosticMetric(object):
         return self.linux.getNetworkWriteBytes(adapterId)
 
     def getNetworkPacketRetransmitted(self):
-        return self.linux.getNetworkPacketRetransmitted()
+        value1 = self.linux.getNetworkPacketRetransmitted()
+        time1 = time.time()
+
+        time.sleep(1)
+
+        value2 = self.linux.getNetworkPacketRetransmitted()
+        time2 = time.time()
+            
+        interval = (time2 - time1)
+        return int(round((value2 - value1) / interval))
   
     def getLastHardwareChange(self):
         return self.linux.getLastHardwareChange()
@@ -320,16 +329,16 @@ class CPUInfo(object):
         self.cores = 1;
         self.coresPerCpu = 1;
         self.threadsPerCore = 1;
-        
-        coresMatch = re.search("CPU(s):\s+(\d+)", self.lscpu)
+
+        coresMatch = re.search("CPU\(s\):\s+(\d+)", self.lscpu)
         if coresMatch:
             self.cores = int(coresMatch.group(1))
         
-        coresPerCpuMatch = re.search("Core(s) per socket:\s+(\d+)", self.lscpu)
+        coresPerCpuMatch = re.search("Core\(s\) per socket:\s+(\d+)", self.lscpu)
         if coresPerCpuMatch:
             self.coresPerCpu = int(coresPerCpuMatch.group(1))
         
-        threadsPerCoreMatch = re.search("Core(s) per socket:\s+(\d+)", self.lscpu)
+        threadsPerCoreMatch = re.search("Thread\(s\) per core:\s+(\d+)", self.lscpu)
         if threadsPerCoreMatch:
             self.threadsPerCore = int(threadsPerCoreMatch.group(1))
         
@@ -583,7 +592,16 @@ class LinuxMetric(object):
         return self.networkInfo.getNetworkWriteBytes(adapterId)
 
     def getNetworkPacketRetransmitted(self):
-        return self.networkInfo.getNetworkPacketRetransmitted()
+        value1 = self.networkInfo.getNetworkPacketRetransmitted()
+        time1 = time.time()
+
+        time.sleep(1)
+
+        value2 = self.networkInfo.getNetworkPacketRetransmitted()
+        time2 = time.time()
+            
+        interval = (time2 - time1)
+        return int(round((value2 - value1) / interval))
   
     def getLastHardwareChange(self):
         return self.hwChangeInfo.getLastHardwareChange()
@@ -812,7 +830,7 @@ class VMDataSource(object):
                            category = "network",
                            name = "Packets Retransmitted",
                            value = metrics.getNetworkPacketRetransmitted(),
-                           unit = "packets/min")
+                           unit = "packets/sec")
 
 def getStorageTimestamp(unixTimestamp):
     tformat = "{0:0>4d}{1:0>2d}{2:0>2d}T{3:0>2d}{4:0>2d}"
@@ -834,8 +852,8 @@ def getStorageTableKeyRange():
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
     try:
         waagent.Log("Retrieve storage metrics data.")
-        tableService = getTableService(accountName,
-                                       accountKey,
+        tableService = getTableService(account,
+                                       key,
                                        hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}'"
                    "").format(startKey, endKey)
