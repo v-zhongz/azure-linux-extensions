@@ -28,6 +28,7 @@ import psutil
 import string
 import urlparse
 import xml.dom.minidom as minidom
+import json
 from azure.storage.table import TableService, Entity
 from Utils.WAAgentUtil import waagent, AddExtensionEvent
 import Utils.HandlerUtil as Util
@@ -142,8 +143,7 @@ def getMDSPartitionKey(identity, timestamp):
 def getAzureDiagnosticKeyRange(deploymentId):
     #Round down by MonitoringInterval
     endTime = (int(time.time()) / MonitoringInterval) * MonitoringInterval
-    endTime = endTime - AzureTableDelay
-    startTime = endTime - MonitoringInterval
+    startTime = endTime - AzureTableDelay
 
     identity = getIdentity(deploymentId)
     startKey = getMDSPartitionKey(identity, getMDSTimestamp(startTime))
@@ -160,11 +160,12 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
                                        hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
-        oselect = ("PercentProcessorTime,DeploymentId")
-        data = tableService.query_entities(table, ofilter, oselect, 1)
-        if data is None or len(data) == 0:
+        oselect = ("PercentProcessorTime,DeploymentId,TIMESTAMP")
+        data = tableService.query_entities(table, ofilter, oselect)
+        len_data = len(data)
+        if data is None or len_data == 0:
             return None
-        cpuPercent = float(data[0].PercentProcessorTime)
+        cpuPercent = float(data[len_data-1].PercentProcessorTime)
         return cpuPercent
     except Exception as e:
         waagent.Error((u"Failed to retrieve diagnostic data(CPU): {0} {1}"
@@ -184,10 +185,11 @@ def getAzureDiagnosticMemoryData(accountName, accountKey, hostBase,
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
         oselect = ("PercentAvailableMemory,DeploymentId")
-        data = tableService.query_entities(table, ofilter, oselect, 1)
-        if data is None or len(data) == 0:
+        data = tableService.query_entities(table, ofilter, oselect)
+        len_data = len(data)
+        if data is None or len_data == 0:
             return None
-        memoryPercent = 100 - float(data[0].PercentAvailableMemory)
+        memoryPercent = 100 - float(data[len_data-1].PercentAvailableMemory)
         return memoryPercent
     except Exception as e:
         waagent.Error((u"Failed to retrieve diagnostic data(Memory): {0} {1}"
@@ -229,7 +231,7 @@ class AzureDiagnosticMetric(object):
         self.config = config
         self.linux = LinuxMetric(self.config)
         self.azure = AzureDiagnosticData(self.config)
-        self.timestamp = int(time.time()) - AzureTableDelay
+        self.timestamp = int(time.time())
 
     def getTimestamp(self):
         return self.timestamp
@@ -845,8 +847,7 @@ def getStorageTimestamp(unixTimestamp):
 def getStorageTableKeyRange():
     #Round down by MonitoringInterval
     endTime = int(time.time()) / MonitoringInterval * MonitoringInterval 
-    endTime = endTime - AzureTableDelay
-    startTime = endTime - MonitoringInterval
+    startTime = endTime - AzureTableDelay
     return getStorageTimestamp(startTime), getStorageTimestamp(endTime)
 
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
