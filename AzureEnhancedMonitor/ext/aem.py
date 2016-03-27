@@ -28,7 +28,6 @@ import psutil
 import string
 import urlparse
 import xml.dom.minidom as minidom
-import json
 from azure.storage.table import TableService, Entity
 from Utils.WAAgentUtil import waagent, AddExtensionEvent
 import Utils.HandlerUtil as Util
@@ -160,7 +159,7 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
                                        hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
-        oselect = ("PercentProcessorTime,DeploymentId,TIMESTAMP")
+        oselect = ("PercentProcessorTime,DeploymentId")
         data = tableService.query_entities(table, ofilter, oselect)
         len_data = len(data)
         if data is None or len_data == 0:
