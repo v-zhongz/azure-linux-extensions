@@ -42,10 +42,4 @@ npm -g install git+https://github.com/yuezh/azure-xplat-cli.git#dev
     …
     ```
 
-## HTTP Proxy
-
-If your VM is using HTTP Proxy, please set environment variable
-
-    HTTP_PROXY=http://<proxy-server>:<port>/
-
 [azure-cli]: https://azure.microsoft.com/en-us/documentation/articles/xplat-cli/
