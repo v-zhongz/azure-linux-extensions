@@ -164,6 +164,10 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
         len_data = len(data)
         if data is None or len_data == 0:
             return None
+        maxPartitionKey = max(data, key=lambda x: x.PartitionKey).PartitionKey
+        data = filter(lambda x: x.PartitionKey == maxPartitionKey, data)
+        waagent.Log("{0} cpu records returned.".format(len(data)))
+        len_data = len(data)
         cpuPercent = float(data[len_data-1].PercentProcessorTime)
         return cpuPercent
     except Exception as e:
@@ -188,6 +192,10 @@ def getAzureDiagnosticMemoryData(accountName, accountKey, hostBase,
         len_data = len(data)
         if data is None or len_data == 0:
             return None
+        maxPartitionKey = max(data, key=lambda x: x.PartitionKey).PartitionKey
+        data = filter(lambda x: x.PartitionKey == maxPartitionKey, data)
+        waagent.Log("{0} memory records returned.".format(len(data)))
+        len_data = len(data)
         memoryPercent = 100 - float(data[len_data-1].PercentAvailableMemory)
         return memoryPercent
     except Exception as e:
