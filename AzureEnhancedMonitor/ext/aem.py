@@ -846,7 +846,7 @@ def getStorageTimestamp(unixTimestamp):
 def getStorageTableKeyRange():
     #Round down by MonitoringInterval
     endTime = int(time.time()) / MonitoringInterval * MonitoringInterval 
-    startTime = endTime - MonitoringInterval
+    startTime = endTime - AzureTableDelay
     return getStorageTimestamp(startTime), getStorageTimestamp(endTime)
 
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
