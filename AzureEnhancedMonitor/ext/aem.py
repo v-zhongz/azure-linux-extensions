@@ -846,7 +846,7 @@ def getStorageTimestamp(unixTimestamp):
 def getStorageTableKeyRange():
     #Round down by MonitoringInterval
     endTime = int(time.time()) / MonitoringInterval * MonitoringInterval 
-    startTime = endTime - AzureTableDelay
+    startTime = endTime - MonitoringInterval
     return getStorageTimestamp(startTime), getStorageTimestamp(endTime)
 
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
@@ -960,12 +960,9 @@ def storageStat(metrics, opFilter):
                             metrics))
     stat['ops'] = sum(map(lambda x : x.TotalRequests, metrics))
     if stat['ops'] != 0:
-        stat['e2eLatency'] = sum(map(lambda x : x.TotalRequests * \
-                                                x.AverageE2ELatency, 
-                                     metrics)) / stat['ops']
-        stat['serverLatency'] = sum(map(lambda x : x.TotalRequests * \
-                                                   x.AverageServerLatency, 
-                                        metrics)) / stat['ops']
+        stat['e2eLatency'] = metrics[-1].AverageE2ELatency
+        stat['serverLatency'] = metrics[-1].AverageServerLatency
+
     #Convert to MB/s
     stat['throughput'] = float(stat['bytes']) / (1024 * 1024) / 60 
     return stat
