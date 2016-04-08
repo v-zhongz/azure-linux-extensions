@@ -140,8 +140,7 @@ def getMDSPartitionKey(identity, timestamp):
     return "{0:0>19d}___{1:0>19d}".format(hashVal, timestamp)
 
 def getAzureDiagnosticKeyRange(deploymentId):
-    #Round down by MonitoringInterval
-    endTime = (int(time.time()) / MonitoringInterval) * MonitoringInterval
+    endTime = int(time.time())
     startTime = endTime - AzureTableDelay
 
     identity = getIdentity(deploymentId)
@@ -164,6 +163,10 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
         len_data = len(data)
         if data is None or len_data == 0:
             return None
+        maxPartitionKey = max(data, key=lambda x: x.PartitionKey).PartitionKey
+        data = filter(lambda x: x.PartitionKey == maxPartitionKey, data)
+        waagent.Log("{0} cpu records returned.".format(len(data)))
+        len_data = len(data)
         cpuPercent = float(data[len_data-1].PercentProcessorTime)
         return cpuPercent
     except Exception as e:
@@ -188,6 +191,10 @@ def getAzureDiagnosticMemoryData(accountName, accountKey, hostBase,
         len_data = len(data)
         if data is None or len_data == 0:
             return None
+        maxPartitionKey = max(data, key=lambda x: x.PartitionKey).PartitionKey
+        data = filter(lambda x: x.PartitionKey == maxPartitionKey, data)
+        waagent.Log("{0} memory records returned.".format(len(data)))
+        len_data = len(data)
         memoryPercent = 100 - float(data[len_data-1].PercentAvailableMemory)
         return memoryPercent
     except Exception as e:
@@ -844,9 +851,8 @@ def getStorageTimestamp(unixTimestamp):
     
 
 def getStorageTableKeyRange():
-    #Round down by MonitoringInterval
-    endTime = int(time.time()) / MonitoringInterval * MonitoringInterval 
-    startTime = endTime - MonitoringInterval
+    endTime = int(time.time()) 
+    startTime = endTime - AzureTableDelay
     return getStorageTimestamp(startTime), getStorageTimestamp(endTime)
 
 def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
@@ -858,8 +864,12 @@ def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}'"
                    "").format(startKey, endKey)
         oselect = ("TotalRequests,TotalIngress,TotalEgress,AverageE2ELatency,"
-                   "AverageServerLatency,RowKey")
+                   "AverageServerLatency,RowKey,PartitionKey")
         metrics = tableService.query_entities(table, ofilter, oselect)
+        waagent.Log("{0} records returned.".format(len(metrics)))
+        maxPartitionKey = max(metrics, key=lambda x: x.PartitionKey).PartitionKey
+        waagent.Log("Max PartitionKey {0}".format(str(maxPartitionKey)))
+        metrics = filter(lambda x: x.PartitionKey == maxPartitionKey, metrics)
         waagent.Log("{0} records returned.".format(len(metrics)))
         return metrics
     except Exception as e:
@@ -960,8 +970,12 @@ def storageStat(metrics, opFilter):
                             metrics))
     stat['ops'] = sum(map(lambda x : x.TotalRequests, metrics))
     if stat['ops'] != 0:
-        stat['e2eLatency'] = metrics[-1].AverageE2ELatency
-        stat['serverLatency'] = metrics[-1].AverageServerLatency
+        stat['e2eLatency'] = sum(map(lambda x : x.TotalRequests * \
+                                                x.AverageE2ELatency,
+                                     metrics)) / stat['ops']
+        stat['serverLatency'] = sum(map(lambda x : x.TotalRequests * \
+                                                   x.AverageServerLatency,
+                                        metrics)) / stat['ops']
 
     #Convert to MB/s
     stat['throughput'] = float(stat['bytes']) / (1024 * 1024) / 60 
