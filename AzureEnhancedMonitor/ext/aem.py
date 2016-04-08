@@ -140,8 +140,7 @@ def getMDSPartitionKey(identity, timestamp):
     return "{0:0>19d}___{1:0>19d}".format(hashVal, timestamp)
 
 def getAzureDiagnosticKeyRange(deploymentId):
-    #Round down by MonitoringInterval
-    endTime = (int(time.time()) / MonitoringInterval) * MonitoringInterval
+    endTime = int(time.time())
     startTime = endTime - AzureTableDelay
 
     identity = getIdentity(deploymentId)
@@ -852,8 +851,7 @@ def getStorageTimestamp(unixTimestamp):
     
 
 def getStorageTableKeyRange():
-    #Round down by MonitoringInterval
-    endTime = int(time.time()) / MonitoringInterval * MonitoringInterval 
+    endTime = int(time.time()) 
     startTime = endTime - AzureTableDelay
     return getStorageTimestamp(startTime), getStorageTimestamp(endTime)
 
