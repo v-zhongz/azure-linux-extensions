@@ -858,8 +858,12 @@ def getStorageMetrics(account, key, hostBase, table, startKey, endKey):
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}'"
                    "").format(startKey, endKey)
         oselect = ("TotalRequests,TotalIngress,TotalEgress,AverageE2ELatency,"
-                   "AverageServerLatency,RowKey")
+                   "AverageServerLatency,RowKey,PartitionKey")
         metrics = tableService.query_entities(table, ofilter, oselect)
+        waagent.Log("{0} records returned.".format(len(metrics)))
+        maxPartitionKey = max(metrics, key=lambda x: x.PartitionKey).PartitionKey
+        waagent.Log("Max PartitionKey {0}".format(str(maxPartitionKey)))
+        metrics = filter(lambda x: x.PartitionKey == maxPartitionKey, metrics)
         waagent.Log("{0} records returned.".format(len(metrics)))
         return metrics
     except Exception as e:
@@ -960,8 +964,12 @@ def storageStat(metrics, opFilter):
                             metrics))
     stat['ops'] = sum(map(lambda x : x.TotalRequests, metrics))
     if stat['ops'] != 0:
-        stat['e2eLatency'] = metrics[-1].AverageE2ELatency
-        stat['serverLatency'] = metrics[-1].AverageServerLatency
+        stat['e2eLatency'] = sum(map(lambda x : x.TotalRequests * \
+                                                x.AverageE2ELatency,
+                                     metrics)) / stat['ops']
+        stat['serverLatency'] = sum(map(lambda x : x.TotalRequests * \
+                                                   x.AverageServerLatency,
+                                        metrics)) / stat['ops']
 
     #Convert to MB/s
     stat['throughput'] = float(stat['bytes']) / (1024 * 1024) / 60 
