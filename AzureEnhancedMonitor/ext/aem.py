@@ -158,7 +158,7 @@ def getAzureDiagnosticCPUData(accountName, accountKey, hostBase,
                                        hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
-        oselect = ("PercentProcessorTime,DeploymentId")
+        oselect = ("PercentProcessorTime,DeploymentId,PartitionKey")
         data = tableService.query_entities(table, ofilter, oselect)
         len_data = len(data)
         if data is None or len_data == 0:
@@ -186,7 +186,7 @@ def getAzureDiagnosticMemoryData(accountName, accountKey, hostBase,
                                        hostBase)
         ofilter = ("PartitionKey ge '{0}' and PartitionKey lt '{1}' "
                    "and DeploymentId eq '{2}'").format(startKey, endKey, deploymentId)
-        oselect = ("PercentAvailableMemory,DeploymentId")
+        oselect = ("PercentAvailableMemory,DeploymentId,PartitionKey")
         data = tableService.query_entities(table, ofilter, oselect)
         len_data = len(data)
         if data is None or len_data == 0:
